@@ -16,18 +16,6 @@ class AirsimDataset(Dataset):
         self.img_dir = os.path.join(img_dir, 'images')
         self.transform = transform
         self.target_transform = target_transform
-        # Run through and remove any corrupted images
-        '''
-        bad = []
-        for idx, an in tqdm.tqdm(self.annotations.iterrows(), total=len(self.annotations)):
-            img_path = os.path.join(self.img_dir, an['ImageFile'])
-            try:
-                image = read_image(img_path, mode=ImageReadMode.RGB)
-            except Exception as e:
-                print(f'Issue with image at: {img_path}')
-                bad.append(an)
-        print(bad)
-        '''
 
     def __len__(self):
         return len(self.annotations)
@@ -49,4 +37,18 @@ class AirsimDataset(Dataset):
         if self.target_transform:
             pos = self.target_transform(pos)
         return image, pos
+
+    @property
+    def targets(self):
+        t = []
+        for idx, an in self.annotations.iterrows():
+            pos = np.array(
+                    [
+                        float(self.annotations.loc[idx, 'POS_X']),
+                        float(self.annotations.loc[idx, 'POS_Y']),
+                        float(self.annotations.loc[idx, 'POS_Z']),
+                        ]
+                    )
+            t.append(pos)
+        return np.array(t)
 

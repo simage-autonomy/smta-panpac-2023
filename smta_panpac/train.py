@@ -1,7 +1,7 @@
 import tqdm
 import torch
 import time
-
+import numpy as np
 
 def train(
         dataloader,
@@ -58,3 +58,31 @@ def train(
 
     print('Complete')
     return model, history
+
+def predict(
+        dataloader,
+        model,
+        device,
+        ):
+
+    # Send model to device
+    model.to(device)
+
+    print('Evaluating model...')
+
+    with torch.no_grad():
+        # Set to eval mode
+        model.eval()
+
+        # initialize predictions
+        preds = []
+
+        for (x, y) in tqdm.tqdm(dataloader, desc='Evaluating on Test Instance'):
+            # Send x to device and cast appropriately
+            x = x.to(torch.float).to(device)
+
+            # Get prediction
+            pred = model(x)
+            preds.append(pred.cpu().numpy())
+    return np.squeeze(np.array(preds), axis=1)
+

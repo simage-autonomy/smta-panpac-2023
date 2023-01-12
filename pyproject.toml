@@ -19,9 +19,9 @@ ipython = "^8.8.0"
 
 
 [tool.poetry.scripts]
-train = 'scripts:train'
 train_vcnn = 'scripts:train_vcnn'
-preprocess_images = 'scripts:preprocess_images'
+run_vcnn = 'scripts:vcnn_experiment'
+remove_corrupted_images = 'scripts:remove_corrupted_images'
 
 [build-system]
 requires = ["poetry-core"]
