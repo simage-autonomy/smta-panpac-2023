@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "smta-panpac-2023"
+version = "0.1.0"
+description = ""
+authors = ["Chase Yakaboski <chase.th@dartmouth.edu>"]
+readme = "README.md"
+packages = [{include = "smta_panpac"}]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+torch = "^1.13.1"
+numpy = "^1.24.1"
+#transformers = { path = "submodules/transformers", develop = false }
+requests = "^2.28.1"
+Pillow = "^9.4.0"
+datasets = "^2.8.0"
+torchvision = "^0.14.1"
+ipython = "^8.8.0"
+
+
+[tool.poetry.scripts]
+train = 'scripts:train'
+train_vcnn = 'scripts:train_vcnn'
+preprocess_images = 'scripts:preprocess_images'
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

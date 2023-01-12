@@ -1,0 +1,6 @@
+[submodule "submodules/transformers"]
+	path = submodules/transformers
+	url = git@github.com:huggingface/transformers.git
+[submodule "submodules/Compact-Transformers"]
+	path = submodules/Compact-Transformers
+	url = git@github.com:SHI-Labs/Compact-Transformers.git
