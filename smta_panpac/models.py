@@ -1,3 +1,4 @@
+import time
 from torch import flatten
 from torch.nn import (
         Module,
@@ -11,8 +12,12 @@ from torch.nn import (
 
 
 class VanillaCNN(Module):
-    def __init__(self, num_channels):
+    def __init__(self, num_channels, name=None):
         super(VanillaCNN, self).__init__()
+
+        if not name:
+            name = f'vanillacnn-{time.strftime("%Y%m%d-%H%M%S")}'
+        self.name = name
 
         # Setup architecture
         # Set 1
@@ -57,6 +62,7 @@ class VanillaCNN(Module):
                     self.fc2,
                     ]
                 )
+
 
     def forward(self, x):
         # Run through convolutions

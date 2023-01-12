@@ -1,7 +1,10 @@
+import os
+import time
 import tqdm
 import torch
 import time
 import numpy as np
+
 
 def train(
         dataloader,
@@ -23,14 +26,14 @@ def train(
 
     print('Training network...')
 
-    for e in range(0, epochs):
+    for e in tqdm.tqdm(range(0, epochs), desc='Epoch'):
         # Model to training mode
         model.train()
 
         # Initialize loss
         total_train_loss = 0
 
-        for (x, y) in tqdm.tqdm(dataloader, desc=f'Epoch: {e}, Batch'):
+        for (x, y) in tqdm.tqdm(dataloader, desc=f'Batch'):
             # Send the input to the device
             (x, y) = (x.to(torch.float).to(device), y.to(torch.float).to(device))
 
@@ -48,13 +51,12 @@ def train(
 
         # Calculate average training loss
         avg_train_loss = total_train_loss / train_steps
-        H["train_loss"].append(avg_train_loss.cpu().detach().numpy())
-        print(f'EPOCH: {e+1}/{EPOCHS}')
-        print('Train Loss: {avg_train_loss}')
+        history["train_loss"].append(avg_train_loss.cpu().detach().numpy())
+        tqdm.tqdm.write(f'Train Loss: {avg_train_loss}')
 
     if savepath:
-        print('Saving model at: {savepath}')
-        torch.save(model, savepath)
+        print(f'Saving model at: {savepath}')
+        torch.save(model, os.path.join(savepath, f'{model.name}.pt'))
 
     print('Complete')
     return model, history

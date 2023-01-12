@@ -135,7 +135,7 @@ def remove_corrupted_images():
     # Hyperparameters
     INIT_LR = 1e-3
     BATCH_SIZE = 64
-    EPOCHS = 10
+    EPOCHS = 1
 
     # Set the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
