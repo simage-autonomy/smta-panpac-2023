@@ -16,10 +16,14 @@ Pillow = "^9.4.0"
 datasets = "^2.8.0"
 torchvision = "^0.14.1"
 ipython = "^8.8.0"
+notebook = "^6.5.2"
+seaborn = "^0.12.2"
+matplotlib = "^3.6.3"
 
 
 [tool.poetry.scripts]
 train_vcnn = 'scripts:train_vcnn'
+train_vit = 'scripts:train_vit'
 run_vcnn = 'scripts:vcnn_experiment'
 remove_corrupted_images = 'scripts:remove_corrupted_images'
 

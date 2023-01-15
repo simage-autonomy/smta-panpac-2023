@@ -12,7 +12,7 @@ class AirsimDataset(Dataset):
     def __init__(self, img_dir, annotations_file='airsim_rec.txt', transform=None, target_transform=None, start=300, end=300):
         self.annotations = pd.read_csv(os.path.join(img_dir, annotations_file), delimiter='\t')
         # Drop the first and last 300 images because these are when the drone takes off and lands
-        self.annotations = self.annotations[start:-end].reset_index()
+        self.annotations = self.annotations[start:-end].reset_index(drop=True)
         self.img_dir = os.path.join(img_dir, 'images')
         self.transform = transform
         self.target_transform = target_transform
@@ -27,6 +27,8 @@ class AirsimDataset(Dataset):
         except Exception as e:
             print(f'Issue with image at: {img_path}')
             raise e
+        # Cast to float tensor
+        image = image.to(torch.float)
         pos = np.array([
                 float(self.annotations.loc[idx, 'POS_X']),
                 float(self.annotations.loc[idx, 'POS_Y']),

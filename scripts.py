@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
-from torchvision.transforms import ToTensor
+from torchvision import transforms
 from torch.optim import Adam
 from torch import nn
 import torch
@@ -13,6 +13,7 @@ import time
 from smta_panpac.models import VanillaCNN
 from smta_panpac.data import AirsimDataset
 from smta_panpac.train import train, predict
+from smta_panpac.compact_transformers.vit import ViTLite
 
 OUTPUT_DIR = './outputs/'
 TRAIN_DIR = '/mnt/c/Users/c_yak/Downloads/smta-data/Morning_Off_Off'
@@ -47,19 +48,37 @@ def vcnn_experiment():
     test_dataloader = DataLoader(test_data)
 
     # Get predictions
-    preds_df = pd.DataFrame(predict(test_dataloader, model, device), columns=['pred_x', 'pred_y', 'pred_z'])
+    preds = predict(test_dataloader, model, device)
+    
+    # Export results
+    export_predictions(test_data, test_dataloader, preds, args.output_dir)
+    print('Complete')
+    return
 
-    # Get Extract Ground Truth
+def export_predictions(
+        test_data,
+        test_dataloader,
+        predictions,
+        output_dir,
+        ):
+    # Setup predictions dataframe
+    preds_df = pd.DataFrame(predictions, columns=['x', 'y', 'z'])
+    preds_df['sample'] = 'prediction'
+    preds_df['timepoint'] = np.array([i for i in range(len(preds_df))])
+
+    # Setup truth dataframe
     truth_df = pd.DataFrame(test_data.targets, columns=['x', 'y', 'z'])
+    truth_df['sample'] = 'true'
+    truth_df['timepoint'] = np.array([i for i in range(len(truth_df))])
 
     # Combine DFs
-    df = pd.concat([truth_df, preds_df], axis=1)
+    df = pd.concat([truth_df, preds_df])
     # Save
-    res_filepath = os.path.join(args.output_dir, f'vanillacnn-results-{time.strftime("%Y%m%d-%H%M%S")}.csv')
+    res_filepath = os.path.join(output_dir, f'vanillacnn-results-{time.strftime("%Y-%m-%d_%H-%M-%S")}.csv')
     print(f'Saving results to: {res_filepath}')
     df.to_csv(res_filepath)
-    print('Complete.')
     return
+
 
 def _train_vcnn(args):
     # Set the device
@@ -90,6 +109,43 @@ def _train_vcnn(args):
             args.output_dir,
             )
 
+def _train_vit(args):
+    # Set the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Setup image transformations which will resize to ViT image size
+    transform = transforms.Compose([
+        transforms.Resize((224,224)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation((0, 180)),
+        transforms.Normalize(
+            mean=torch.tensor([0.5, 0.5, 0.5]),
+            std=torch.tensor([0.5, 0.5, 0.5]),
+            )
+        ])
+
+    # Setup data
+    data = AirsimDataset(args.train_dir, transform=transform)
+    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
+
+    # Training Loop
+    train_steps = len(dataloader.dataset) // args.batch_size
+
+    ## Initialize model
+    model = ViTLite()
+
+    ## Initialize optimization and loss
+    opt = Adam(model.parameters(), lr=args.lr)
+    loss_fn = nn.MSELoss()
+
+    for (x,y) in dataloader:
+        pred = model(x)
+        print(pred)
+        break
+
+def train_vit():
+    args = parse()
+    return _train_vit(args)
 
 def train_vcnn():
     args = parse()
