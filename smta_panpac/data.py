@@ -32,7 +32,6 @@ class AirsimDataset(Dataset):
         pos = np.array([
                 float(self.annotations.loc[idx, 'POS_X']),
                 float(self.annotations.loc[idx, 'POS_Y']),
-                float(self.annotations.loc[idx, 'POS_Z']),
                 ])
         if self.transform:
             image = self.transform(image)
@@ -48,7 +47,6 @@ class AirsimDataset(Dataset):
                     [
                         float(self.annotations.loc[idx, 'POS_X']),
                         float(self.annotations.loc[idx, 'POS_Y']),
-                        float(self.annotations.loc[idx, 'POS_Z']),
                         ]
                     )
             t.append(pos)

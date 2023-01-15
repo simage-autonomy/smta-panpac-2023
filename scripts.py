@@ -1,14 +1,15 @@
 import os, sys
 import tqdm
 import argparse
+import torch
+import time
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.optim import Adam
 from torch import nn
-import torch
-import time
+from transformers import AutoConfig, BeitImageProcessor, BeitModel
 
 from smta_panpac.models import VanillaCNN
 from smta_panpac.data import AirsimDataset
@@ -132,16 +133,76 @@ def _train_vit(args):
     train_steps = len(dataloader.dataset) // args.batch_size
 
     ## Initialize model
-    model = ViTLite()
+    model = ViTLite(
+            num_layers=2,
+            num_heads=2,
+            mlp_ratio=1,
+            embedding_dim=128,
+            num_classes=2,
+            )
+
+    # Set model name
+    model.name = 'vit-2-2'
+
+    ## Initialize optimization and loss
+    opt = Adam(model.parameters(), lr=args.lr)
+    loss_fn = nn.MSELoss()
+    
+    return train(
+            dataloader,
+            model,
+            loss_fn,
+            opt,
+            train_steps,
+            args.epochs,
+            device,
+            args.output_dir,
+            )
+
+def _train_beit(args):
+    # Set the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Setup image transformations which will resize to ViT image size
+    transform = transforms.Compose([
+        transforms.Resize((224,224)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation((0, 180)),
+        transforms.Normalize(
+            mean=torch.tensor([0.5, 0.5, 0.5]),
+            std=torch.tensor([0.5, 0.5, 0.5]),
+            )
+        ])
+
+    # Setup data
+    data = AirsimDataset(args.train_dir, transform=transform)
+    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
+
+    # Training Loop
+    train_steps = len(dataloader.dataset) // args.batch_size
+
+    ## Initialize model
+    config = AutoConfig.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
+    feature_extractor = BeitImageProcessor.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
+    config.num_labels = 2
+    model = BeitModel.from_config(config)
+
+    # Set model name
+    model.name = 'beit-finetune'
 
     ## Initialize optimization and loss
     opt = Adam(model.parameters(), lr=args.lr)
     loss_fn = nn.MSELoss()
 
-    for (x,y) in dataloader:
-        pred = model(x)
-        print(pred)
+    for (x, y) in dataloader:
+        preds = model(x)
+        print(preds.shape)
         break
+    
+
+def train_beit():
+    args = parse()
+    return _train_beit(args)
 
 def train_vit():
     args = parse()
