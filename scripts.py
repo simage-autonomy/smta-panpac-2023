@@ -185,7 +185,8 @@ def _train_beit(args):
     config = AutoConfig.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
     feature_extractor = BeitImageProcessor.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
     config.num_labels = 2
-    model = BeitModel.from_config(config)
+    model = BeitModel.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
+    model.config.num_labels = 2
 
     # Set model name
     model.name = 'beit-finetune'
