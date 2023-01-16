@@ -43,7 +43,7 @@ class VanillaCNN(Module):
         self.relu3 = ReLU()
 
         # Regression output
-        self.fc2 = Linear(in_features=500, out_features=3)
+        self.fc2 = Linear(in_features=500, out_features=2)
 
         self.conv_base = ModuleList(
                 [

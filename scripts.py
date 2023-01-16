@@ -9,11 +9,12 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch.optim import Adam
 from torch import nn
-from transformers import AutoConfig, BeitImageProcessor, BeitModel
+from transformers import AutoConfig, BeitImageProcessor, BeitForImageClassification
+from PIL import Image
 
 from smta_panpac.models import VanillaCNN
-from smta_panpac.data import AirsimDataset
-from smta_panpac.train import train, predict
+from smta_panpac.data import AirsimDataset, BeitAirsimDataset
+from smta_panpac.train import train, train_huggingfaces, predict
 from smta_panpac.compact_transformers.vit import ViTLite
 
 OUTPUT_DIR = './outputs/'
@@ -163,30 +164,20 @@ def _train_beit(args):
     # Set the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Setup image transformations which will resize to ViT image size
-    transform = transforms.Compose([
-        transforms.Resize((224,224)),
-        transforms.RandomHorizontalFlip(p=0.5),
-        transforms.RandomRotation((0, 180)),
-        transforms.Normalize(
-            mean=torch.tensor([0.5, 0.5, 0.5]),
-            std=torch.tensor([0.5, 0.5, 0.5]),
-            )
-        ])
-
     # Setup data
-    data = AirsimDataset(args.train_dir, transform=transform)
+    data = BeitAirsimDataset(args.train_dir)
     dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
 
     # Training Loop
     train_steps = len(dataloader.dataset) // args.batch_size
 
     ## Initialize model
-    config = AutoConfig.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
-    feature_extractor = BeitImageProcessor.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
-    config.num_labels = 2
-    model = BeitModel.from_pretrained('microsoft/beit-base-patch16-224-pt22k')
-    model.config.num_labels = 2
+    feature_extractor = BeitImageProcessor.from_pretrained('microsoft/beit-base-patch16-224')
+    model = BeitForImageClassification.from_pretrained(
+            'microsoft/beit-base-patch16-224',
+            num_labels=2,
+            ignore_mismatched_sizes=True,
+            )
 
     # Set model name
     model.name = 'beit-finetune'
@@ -194,12 +185,20 @@ def _train_beit(args):
     ## Initialize optimization and loss
     opt = Adam(model.parameters(), lr=args.lr)
     loss_fn = nn.MSELoss()
+    x_transform_fn = lambda x: [Image.fromarray(_x, mode="RGB") for _x in x.numpy()]
 
-    for (x, y) in dataloader:
-        preds = model(x)
-        print(preds.shape)
-        break
-    
+    return train_huggingfaces(
+            dataloader,
+            feature_extractor,
+            x_transform_fn,
+            model,
+            loss_fn,
+            opt,
+            train_steps,
+            args.epochs,
+            device,
+            args.output_dir,
+            )
 
 def train_beit():
     args = parse()

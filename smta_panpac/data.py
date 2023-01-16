@@ -6,6 +6,8 @@ import tqdm
 from torch.utils.data import Dataset
 from torchvision.transforms import Resize
 from torchvision.io import read_image, ImageReadMode
+from transformers import BeitImageProcessor
+from PIL import Image
 
 
 class AirsimDataset(Dataset):
@@ -51,4 +53,37 @@ class AirsimDataset(Dataset):
                     )
             t.append(pos)
         return np.array(t)
+
+
+class BeitAirsimDataset(AirsimDataset):
+    def __init__(
+            self,
+            img_dir,
+            annotations_file='airsim_rec.txt',
+            target_transform=None,
+            start=300,
+            end=300,
+            do_resize=True,
+            size={"height": 256, "width": 256},
+            do_center_crop=True,
+            crop_size={"height": 224, "width": 224},
+            do_normalize=True,
+            ):
+        super().__init__(img_dir, annotations_file=annotations_file, target_transform=target_transform, start=start, end=end)
+
+    def __getitem__(self, idx):
+        img_path = os.path.join(self.img_dir, self.annotations.loc[idx, 'ImageFile'])
+        with Image.open(img_path) as image:
+            img = np.array(image)
+        pos = np.array([
+                float(self.annotations.loc[idx, 'POS_X']),
+                float(self.annotations.loc[idx, 'POS_Y']),
+                ])
+        if self.target_transform:
+            pos = self.target_transform(pos)
+        return img, pos
+
+
+        
+
 
