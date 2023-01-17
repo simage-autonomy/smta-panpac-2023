@@ -19,6 +19,7 @@ ipython = "^8.8.0"
 notebook = "^6.5.2"
 seaborn = "^0.12.2"
 matplotlib = "^3.6.3"
+h5py = "^3.7.0"
 
 
 [tool.poetry.scripts]
@@ -26,7 +27,7 @@ train_vcnn = 'scripts:train_vcnn'
 train_vit = 'scripts:train_vit'
 train_beit = 'scripts:train_beit'
 run_vcnn = 'scripts:vcnn_experiment'
-remove_corrupted_images = 'scripts:remove_corrupted_images'
+create_hdf5 = 'scripts:create_hdf5'
 
 [build-system]
 requires = ["poetry-core"]

@@ -3,6 +3,7 @@ import tqdm
 import argparse
 import torch
 import time
+import h5py
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader
@@ -240,6 +241,69 @@ def remove_corrupted_images():
     new_annotations = new_annotations.reset_index(drop=True)
     new_annotations.to_csv(os.path.join(args.d, 'airsim_rec-new.txt'), sep='\t')
     print('Complete.')
+
+def extract_experiment(exp_grp, annotations, img_dir, experiment):
+    is_dataset_init = False
+    img_data = []
+    label_data = []
+    for idx, an in tqdm.tqdm(annotations.iterrows(), desc=f'Processing {experiment}', total=len(annotations), leave=False):
+        img_path = os.path.join(img_dir, an['ImageFile'])
+        try:
+            with Image.open(img_path) as image:
+                image = image.convert('RGB')
+                arr = np.array(image)
+        except Exception as e:
+            tqdm.tqdm.write(f'Issue with image at: {img_path} so not including.')
+            continue
+        img_data.append(arr)
+        label_data.append(np.array(an)[1:-1].astype(float))
+    print('Casting to numpy array.')
+    img_data = np.array(img_data)
+    label_data = np.array(label_data)
+    img_ds = exp_grp.create_dataset('images', img_data.shape, dtype='f')
+    label_ds = exp_grp.create_dataset('labels', label_data.shape, dtype='f')
+    print('Saving to hdf5 file.')
+    img_ds[...] = img_data
+    label_ds[...] = label_data
+    label_ds.attrs['label_names'] = [s.lower() for s in list(annotations.columns)[1:-1]]
+    return
+
+def create_hdf5():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-train_dir', help='Path to Training directory to analyze.')
+    parser.add_argument('-test_dir', help='Path to Testing directory.')
+    parser.add_argument('--name', help='Name of the dataset', default='airsim_data.hdf5')
+    args = parser.parse_args()
+
+    # Initialize dataset
+    f = h5py.File(args.name, mode='w')
+    
+    # Create training group
+    train_grp = f.create_group('train')
+
+    # Process training data
+    for experiment in os.listdir(args.train_dir)[:1]:
+        # Load annotations
+        annotations = pd.read_csv(os.path.join(args.train_dir, experiment, 'airsim_rec.txt'), delimiter='\t')
+        img_dir = os.path.join(args.train_dir, experiment, 'images')
+        # Create experiment group in training group
+        exp_grp = train_grp.create_group(experiment.lower())
+        extract_experiment(exp_grp, annotations, img_dir, experiment)
+    
+    # Create testing group
+    test_grp = f.create_group('test')
+    
+    # Process testing data
+    for experiment in os.listdir(args.test_dir)[:1]:
+        # Load annotations
+        annotations = pd.read_csv(os.path.join(args.test_dir, experiment, 'airsim_rec.txt'), delimiter='\t')
+        img_dir = os.path.join(args.test_dir, experiment, 'images')
+        # Create experiment group in training group
+        exp_grp = test_grp.create_group(experiment.lower())
+        extract_experiment(exp_grp, annotations, img_dir, experiment)
+
+    f.close()
+    return
 
 if __name__ == '__main__':
     args = parse()
