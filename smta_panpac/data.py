@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import torch
 import tqdm
+import h5py
 from torch.utils.data import Dataset
 from torchvision.transforms import Resize
 from torchvision.io import read_image, ImageReadMode
@@ -11,48 +12,36 @@ from PIL import Image
 
 
 class AirsimDataset(Dataset):
-    def __init__(self, img_dir, annotations_file='airsim_rec.txt', transform=None, target_transform=None, start=300, end=300):
-        self.annotations = pd.read_csv(os.path.join(img_dir, annotations_file), delimiter='\t')
-        # Drop the first and last 300 images because these are when the drone takes off and lands
-        self.annotations = self.annotations[start:-end].reset_index(drop=True)
-        self.img_dir = os.path.join(img_dir, 'images')
+    def __init__(self, h5_path, experiment, group, transform=None, target_transform=None):
+        self.h5_path = h5_path
+        self._archive = None
+        self.group = group
+        self.experiment = experiment
         self.transform = transform
         self.target_transform = target_transform
 
+    @property
+    def archive(self):
+        if self._archive is None:
+            self._archive = h5py.File(self.h5_path, 'r')
+        return self._archive
+
     def __len__(self):
-        return len(self.annotations)
+        return len(self.archive[self.group][self.experiment]['labels'])
 
     def __getitem__(self, idx):
-        img_path = os.path.join(self.img_dir, self.annotations.loc[idx, 'ImageFile'])
-        try:
-            image = read_image(img_path, mode=ImageReadMode.RGB)
-        except Exception as e:
-            print(f'Issue with image at: {img_path}')
-            raise e
-        # Cast to float tensor
-        image = image.to(torch.float)
-        pos = np.array([
-                float(self.annotations.loc[idx, 'POS_X']),
-                float(self.annotations.loc[idx, 'POS_Y']),
-                ])
+        img = np.rollaxis(self.archive[self.group][self.experiment]['images'][idx], 2, 0)
+        pos = self.archive[self.group][self.experiment]['labels'][idx]
+        pos = pos[1:3]
         if self.transform:
-            image = self.transform(image)
+            img = self.transform(img)
         if self.target_transform:
             pos = self.target_transform(pos)
-        return image, pos
+        return img, pos
 
     @property
     def targets(self):
-        t = []
-        for idx, an in self.annotations.iterrows():
-            pos = np.array(
-                    [
-                        float(self.annotations.loc[idx, 'POS_X']),
-                        float(self.annotations.loc[idx, 'POS_Y']),
-                        ]
-                    )
-            t.append(pos)
-        return np.array(t)
+        return self.archive[self.group]['labels'][:,1:3]
 
 
 class BeitAirsimDataset(AirsimDataset):

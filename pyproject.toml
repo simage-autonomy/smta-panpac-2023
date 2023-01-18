@@ -28,6 +28,7 @@ train_vit = 'scripts:train_vit'
 train_beit = 'scripts:train_beit'
 run_vcnn = 'scripts:vcnn_experiment'
 create_hdf5 = 'scripts:create_hdf5'
+get_experiment_names = 'scripts:get_experiment_names'
 
 [build-system]
 requires = ["poetry-core"]

@@ -23,7 +23,9 @@ TRAIN_DIR = '/mnt/c/Users/c_yak/Downloads/smta-data/Morning_Off_Off'
 
 def parse():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-test_dir', help='Test Directory')
+    parser.add_argument('-d', help='Hdf5 dataset path.')
+    parser.add_argument('-e', help='Name of experiment to run.')
+    parser.add_argument('--set', help='Train or Test.', default='train', type=str)
     parser.add_argument('--model_path', help='Path to pre-trained model.', default=None)
     parser.add_argument('--output_dir', help='Output directory.', default=OUTPUT_DIR)
     parser.add_argument('--train_dir', help='Training directory.', default=TRAIN_DIR)
@@ -32,6 +34,8 @@ def parse():
     parser.add_argument('--lr', help='Learning rate for training.', default=1e-3, type=float)
     parser.add_argument('--script_name', help='Name of the script to run.', default=None, type=str)
     return parser.parse_args()
+
+
 
 def vcnn_experiment():
     # Parse args
@@ -88,8 +92,8 @@ def _train_vcnn(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Setup data
-    data = AirsimDataset(args.train_dir, transform=None)
-    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
+    data = AirsimDataset(args.d, args.e, args.set, transform=None)
+    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     # Training Loop
     train_steps = len(dataloader.dataset) // args.batch_size
@@ -258,8 +262,8 @@ def extract_experiment(exp_grp, annotations, img_dir, experiment):
         img_data.append(arr)
         label_data.append(np.array(an)[1:-1].astype(float))
     print('Casting to numpy array.')
-    img_data = np.array(img_data)
-    label_data = np.array(label_data)
+    img_data = np.array(img_data[300:-300])
+    label_data = np.array(label_data[300:-300])
     img_ds = exp_grp.create_dataset('images', img_data.shape, dtype='f')
     label_ds = exp_grp.create_dataset('labels', label_data.shape, dtype='f')
     print('Saving to hdf5 file.')
@@ -283,6 +287,10 @@ def create_hdf5():
 
     # Process training data
     for experiment in os.listdir(args.train_dir)[:1]:
+        if '.zip' in experiment:
+            continue
+        if '.tar.gz' in experiment:
+            continue
         # Load annotations
         annotations = pd.read_csv(os.path.join(args.train_dir, experiment, 'airsim_rec.txt'), delimiter='\t')
         img_dir = os.path.join(args.train_dir, experiment, 'images')
@@ -294,7 +302,11 @@ def create_hdf5():
     test_grp = f.create_group('test')
     
     # Process testing data
-    for experiment in os.listdir(args.test_dir)[:1]:
+    for experiment in os.listdir(args.test_dir)[:2]:
+        if '.zip' in experiment:
+            continue
+        if '.tar.gz' in experiment:
+            continue
         # Load annotations
         annotations = pd.read_csv(os.path.join(args.test_dir, experiment, 'airsim_rec.txt'), delimiter='\t')
         img_dir = os.path.join(args.test_dir, experiment, 'images')
@@ -303,6 +315,19 @@ def create_hdf5():
         extract_experiment(exp_grp, annotations, img_dir, experiment)
 
     f.close()
+    return
+
+def get_experiment_names():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', help='Hdf5 dataset path.')
+    args = parser.parse_args()
+    f = h5py.File(args.d, 'r')
+    print('Available Training Experiments:')
+    for key in f['train'].keys():
+        print(f'\t- {key}')
+    print('Available Testing Experiments:')
+    for key in f['test'].keys():
+        print(f'\t- {key}')
     return
 
 if __name__ == '__main__':
