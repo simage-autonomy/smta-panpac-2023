@@ -157,3 +157,35 @@ def predict(
             preds.append(pred.cpu().numpy())
     return np.squeeze(np.array(preds), axis=1)
 
+def predict_huggingfaces(
+        dataloader,
+        feature_extractor,
+        x_transform_fn,
+        model,
+        device,
+        ):
+
+    # Send model to device
+    model.to(device)
+
+    print('Evaluating model...')
+
+    with torch.no_grad():
+        # Set to eval mode
+        model.eval()
+
+        # initialize predictions
+        preds = []
+
+        for (x, y) in tqdm.tqdm(dataloader, desc='Evaluating on Test Instance'):
+            # Transform x given the transform fn
+            x = x_transform_fn(x)
+            # Send the input to the device
+            inputs = feature_extractor(x, return_tensors="pt").to(device)
+            y = y.to(torch.float).to(device)
+
+            # get prediction
+            pred = model(**inputs).logits
+
+            preds.append(pred.cpu().numpy())
+    return np.squeeze(np.array(preds), axis=1)

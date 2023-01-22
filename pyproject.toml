@@ -26,9 +26,11 @@ h5py = "^3.7.0"
 train_vcnn = 'scripts:train_vcnn'
 train_vit = 'scripts:train_vit'
 train_beit = 'scripts:train_beit'
-run_vcnn = 'scripts:vcnn_experiment'
+run_vcnn = 'scripts:vcnn_experiments'
 create_hdf5 = 'scripts:create_hdf5'
 get_experiment_names = 'scripts:get_experiment_names'
+run_experiment = 'scripts:run_experiment'
+run_predictions = 'scripts:run_predictions'
 
 [build-system]
 requires = ["poetry-core"]

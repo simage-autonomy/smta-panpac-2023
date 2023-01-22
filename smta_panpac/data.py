@@ -5,7 +5,7 @@ import torch
 import tqdm
 import h5py
 from torch.utils.data import Dataset
-from torchvision.transforms import Resize
+from torchvision.transforms import Resize, ToTensor
 from torchvision.io import read_image, ImageReadMode
 from transformers import BeitImageProcessor
 from PIL import Image
@@ -30,10 +30,18 @@ class AirsimDataset(Dataset):
         return len(self.archive[self.group][self.experiment]['labels'])
 
     def __getitem__(self, idx):
-        img = np.rollaxis(self.archive[self.group][self.experiment]['images'][idx], 2, 0)
+        #img = np.rollaxis(self.archive[self.group][self.experiment]['images'][idx], 2, 0)
+        img = Image.fromarray(
+                self.archive[self.group][self.experiment]['images'][idx],
+                mode="RGB"
+                )
+        # Convert to tensor
+        img = ToTensor()(img)
+        # Get positional info
         pos = self.archive[self.group][self.experiment]['labels'][idx]
         pos = pos[1:3]
         if self.transform:
+            #im = Image.fromarray(img, mode="RGB")
             img = self.transform(img)
         if self.target_transform:
             pos = self.target_transform(pos)
@@ -41,7 +49,7 @@ class AirsimDataset(Dataset):
 
     @property
     def targets(self):
-        return self.archive[self.group]['labels'][:,1:3]
+        return self.archive[self.group][self.experiment]['labels'][:,1:3]
 
 
 class BeitAirsimDataset(AirsimDataset):

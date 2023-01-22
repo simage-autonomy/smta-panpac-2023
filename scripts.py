@@ -15,7 +15,7 @@ from PIL import Image
 
 from smta_panpac.models import VanillaCNN
 from smta_panpac.data import AirsimDataset, BeitAirsimDataset
-from smta_panpac.train import train, train_huggingfaces, predict
+from smta_panpac.train import train, train_huggingfaces, predict, predict_huggingfaces
 from smta_panpac.compact_transformers.vit import ViTLite
 
 OUTPUT_DIR = './outputs/'
@@ -24,7 +24,7 @@ TRAIN_DIR = '/mnt/c/Users/c_yak/Downloads/smta-data/Morning_Off_Off'
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', help='Hdf5 dataset path.')
-    parser.add_argument('-e', help='Name of experiment to run.')
+    parser.add_argument('--exp', help='Name of experiment to run.')
     parser.add_argument('--set', help='Train or Test.', default='train', type=str)
     parser.add_argument('--model_path', help='Path to pre-trained model.', default=None)
     parser.add_argument('--output_dir', help='Output directory.', default=OUTPUT_DIR)
@@ -33,55 +33,176 @@ def parse():
     parser.add_argument('--batch_size', help='Batch size to use for training', default=64, type=int)
     parser.add_argument('--lr', help='Learning rate for training.', default=1e-3, type=float)
     parser.add_argument('--script_name', help='Name of the script to run.', default=None, type=str)
+    parser.add_argument('--model_class', help='Name of the model class.', default=None)
     return parser.parse_args()
 
-
-
-def vcnn_experiment():
+def vcnn_experiments():
     # Parse args
     args = parse()
     
     # Set the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if args.model_path is None:
-        print('No model path passed, will train from scratch.')
+    # Load dataset
+    f = h5py.File(args.d, 'r')
+    train_exps = list(f['train'].keys())
+    test_exps = list(f['test'].keys())
+    f.close()
+
+    # Run training for each dataset
+    for experiment in train_exps:
+        print(f'Training on {experiment}')
+        args.exp = experiment
         model, history = _train_vcnn(args)
-    else:
-        model = torch.load(args.model_path)
 
-    # Setup test data
-    test_data = AirsimDataset(args.test_dir, transform=None, start=300, end=300)
-    test_dataloader = DataLoader(test_data)
+    # Run Testing
+    for experiment in test_exps:
+        print(f'Testing on {experiment}')
+        # Setup test data
+        test_data = AirsimDataset(args.d, experiment, 'test',  transform=None)
+        test_dataloader = DataLoader(test_data)
 
-    # Get predictions
-    preds = predict(test_dataloader, model, device)
+        # Get predictions
+        preds = predict(test_dataloader, model, device)
     
-    # Export results
-    export_predictions(test_data, test_dataloader, preds, args.output_dir)
+        # Export results
+        export_predictions(test_data, test_dataloader, preds, args.output_dir)
     print('Complete')
     return
+
+def run_experiment():
+    # Parse args
+    args = parse()
+    
+    # Set the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Load dataset
+    f = h5py.File(args.d, 'r')
+    test_exps = list(f['test'].keys())
+    f.close()
+
+    if args.model_class == 'vcnn':
+        model, history = _train_vcnn(args)
+    elif args.model_class == 'vit':
+        model, history = _train_vit(args)
+    elif args.model_class == 'beit':
+        model, history = _train_beit(args)
+    else:
+        raise ValueError(f'Unknown model class {args.model_class}')
+
+    # Run Testing
+    for experiment in test_exps:
+        print(f'Testing on {experiment}')
+        # Setup test data
+        test_data = AirsimDataset(args.d, experiment, 'test',  transform=None)
+        test_dataloader = DataLoader(test_data)
+
+        # Get predictions
+        preds = predict(test_dataloader, model, device)
+    
+        # Export results
+        export_predictions(test_data, test_dataloader, preds, args.output_dir)
+    print('Complete')
+    return
+
+def run_predictions():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', help='Hdf5 dataset path.')
+    parser.add_argument('-m', help='Path to model files.')
+    parser.add_argument('-o', help='Output directory and where model files are located.')
+    args = parser.parse_args()
+    
+    # Set the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Load dataset
+    f = h5py.File(args.d, 'r')
+    test_exps = list(f['test'].keys())
+    f.close()
+    
+    # Read model files
+    with open(args.m, 'r') as f_:
+        model_names = f_.readlines()
+
+    # Specify transforms
+    # Setup image transformations which will resize to ViT image size
+    vit_transform = transforms.Compose([
+        transforms.Resize((224,224)),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomRotation((0, 180)),
+        transforms.Normalize(
+            mean=torch.tensor([0.5, 0.5, 0.5]),
+            std=torch.tensor([0.5, 0.5, 0.5]),
+            ),
+        ])
+    # Transform fn for BEiT
+    x_transform_fn = lambda x: [Image.fromarray(_x, mode="RGB") for _x in x.numpy()]
+    feature_extractor = BeitImageProcessor.from_pretrained('microsoft/beit-base-patch16-224')
+
+    # Run predictions and tests for each model file
+    for model_name in model_names:
+        model_name = model_name.strip()
+        print(f'Predicting with {model_name}.')
+        model_path = os.path.join(args.o, model_name)
+        model_name_noext = os.path.splitext(model_name)[0]
+        model = torch.load(model_path)
+        
+        # Set the model name
+        model.name = model_name_noext
+
+        # Model specific criteria
+        if 'vit' in model_name_noext:
+            transform = vit_transform
+        else:
+            transform = None
+
+        # Run Testing
+        for experiment in test_exps:
+            print(f'Testing on {experiment}')
+            # Setup test data
+            test_data = AirsimDataset(args.d, experiment, 'test',  transform=transform)
+            test_dataloader = DataLoader(test_data)
+
+            # Get predictions
+            if 'beit' in model_name_noext:
+                preds = predict_huggingfaces(
+                        test_dataloader,
+                        feature_extractor,
+                        x_transform_fn,  
+                        model,
+                        device,
+                        )
+            else:
+                preds = predict(test_dataloader, model, device)
+        
+            # Export results
+            export_predictions(test_data, test_dataloader, preds, args.o, model)
+    print('Complete')
+    return
+
 
 def export_predictions(
         test_data,
         test_dataloader,
         predictions,
         output_dir,
+        model,
         ):
     # Setup predictions dataframe
-    preds_df = pd.DataFrame(predictions, columns=['x', 'y', 'z'])
+    preds_df = pd.DataFrame(predictions, columns=['x', 'y'])
     preds_df['sample'] = 'prediction'
     preds_df['timepoint'] = np.array([i for i in range(len(preds_df))])
 
     # Setup truth dataframe
-    truth_df = pd.DataFrame(test_data.targets, columns=['x', 'y', 'z'])
+    truth_df = pd.DataFrame(test_data.targets, columns=['x', 'y'])
     truth_df['sample'] = 'true'
     truth_df['timepoint'] = np.array([i for i in range(len(truth_df))])
 
     # Combine DFs
     df = pd.concat([truth_df, preds_df])
     # Save
-    res_filepath = os.path.join(output_dir, f'vanillacnn-results-{time.strftime("%Y-%m-%d_%H-%M-%S")}.csv')
+    res_filepath = os.path.join(output_dir, f'{model.name}-results-{test_data.experiment}.csv')
     print(f'Saving results to: {res_filepath}')
     df.to_csv(res_filepath)
     return
@@ -92,14 +213,14 @@ def _train_vcnn(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Setup data
-    data = AirsimDataset(args.d, args.e, args.set, transform=None)
+    data = AirsimDataset(args.d, args.exp, args.set, transform=None)
     dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     # Training Loop
     train_steps = len(dataloader.dataset) // args.batch_size
 
     ## Initialize model
-    model = VanillaCNN(3)
+    model = VanillaCNN(3, name=f'vcnn-{args.exp}-{time.strftime("%Y%m%d-%H%M%S")}')
 
     ## Initialize optimization and loss
     opt = Adam(model.parameters(), lr=args.lr)
@@ -128,12 +249,12 @@ def _train_vit(args):
         transforms.Normalize(
             mean=torch.tensor([0.5, 0.5, 0.5]),
             std=torch.tensor([0.5, 0.5, 0.5]),
-            )
+            ),
         ])
 
     # Setup data
-    data = AirsimDataset(args.train_dir, transform=transform)
-    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
+    data = AirsimDataset(args.d, args.exp, args.set, transform=transform)
+    dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
     # Training Loop
     train_steps = len(dataloader.dataset) // args.batch_size
@@ -148,7 +269,7 @@ def _train_vit(args):
             )
 
     # Set model name
-    model.name = 'vit-2-2'
+    model.name = f'vit-2-2-{args.exp}-{time.strftime("%Y%m%d-%H%M%S")}'
 
     ## Initialize optimization and loss
     opt = Adam(model.parameters(), lr=args.lr)
@@ -170,7 +291,7 @@ def _train_beit(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Setup data
-    data = BeitAirsimDataset(args.train_dir)
+    data = AirsimDataset(args.d, args.exp, args.set, transform=None)
     dataloader = DataLoader(data, batch_size=args.batch_size, shuffle=True)
 
     # Training Loop
@@ -185,7 +306,7 @@ def _train_beit(args):
             )
 
     # Set model name
-    model.name = 'beit-finetune'
+    model.name = f'beit-finetune-{args.exp}-{time.strftime("%Y%m%d-%H%M%S")}'
 
     ## Initialize optimization and loss
     opt = Adam(model.parameters(), lr=args.lr)
@@ -286,7 +407,7 @@ def create_hdf5():
     train_grp = f.create_group('train')
 
     # Process training data
-    for experiment in os.listdir(args.train_dir)[:1]:
+    for experiment in os.listdir(args.train_dir):
         if '.zip' in experiment:
             continue
         if '.tar.gz' in experiment:
@@ -302,7 +423,7 @@ def create_hdf5():
     test_grp = f.create_group('test')
     
     # Process testing data
-    for experiment in os.listdir(args.test_dir)[:2]:
+    for experiment in os.listdir(args.test_dir):
         if '.zip' in experiment:
             continue
         if '.tar.gz' in experiment:
