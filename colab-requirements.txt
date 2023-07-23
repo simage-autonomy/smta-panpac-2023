@@ -1,0 +1,8 @@
+tqdm==4.64.1
+transformers @ file:///content/smta-panpac-2023/submodules/transformers
+torch>=1.13.0
+numpy>=1.23.0
+requests>=2.28.1
+Pillow>=9.4.0
+datasets>=2.8.0
+torchvision>=0.14.0
